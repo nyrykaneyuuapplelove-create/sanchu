@@ -32,8 +32,8 @@ export default function Login() {
   const submit = () => {
     if (!name.trim()) return setError("名前を入力してください");
     if (!/^\d{6,10}$/.test(studentId)) return setError("学籍番号は数字 6〜10 桁で入力してください");
-    if (users.some((u) => u.studentId === studentId)) return setError("この学籍番号はすでに登録されています");
-    register({ name: name.trim(), studentId, avatar: lineProfile!.avatar, lineId: lineId.trim() });
+    const err = register({ name: name.trim(), studentId, avatar: lineProfile!.avatar, lineId: lineId.trim() });
+    if (err) return setError(err);
     navigate("/timetable/import");
   };
 
@@ -65,7 +65,7 @@ export default function Login() {
               </div>
             </div>
             <Field label="名前">
-              <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
+              <input className={inputCls} value={name} maxLength={20} onChange={(e) => setName(e.target.value)} />
             </Field>
             <Field label="学籍番号" hint="送金のときに相手を探すのに使います">
               <input className={inputCls} inputMode="numeric" value={studentId} onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ""))} />

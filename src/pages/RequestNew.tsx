@@ -8,8 +8,6 @@ import { PageHeader } from "../components/Layout";
 import { Button, Card, Field, inputCls, useNow } from "../components/ui";
 import { REQUEST_KINDS } from "./Board";
 
-const BANNED = /代行|代わりに(解|や|書|提出)|答え(を|ちょうだい|教えて|見せて)|写させ|丸写し|解答(を|ちょうだい|送って)|レポート(書いて|作って)/;
-
 export default function RequestNew() {
   const now = useNow();
   const [params] = useSearchParams();
@@ -54,24 +52,20 @@ export default function RequestNew() {
   const assignment = todo.find((a) => a.id === assignmentId);
 
   const submit = () => {
-    const p = Number(price);
     if (!title.trim()) return setError("タイトルを入力してください");
-    if (!p || p <= 0) return setError("価格は 1 ぺい以上にしてください");
-    if (p > balance) return setError(`残高（${pei(balance)}）を超える価格は設定できません`);
-    if (BANNED.test(title + detail)) return setError("課題の代行や答えの受け渡しにあたる依頼は投稿できません。考え方の解説として依頼してください");
     const due = fromLocalInput(dueAt);
-    if (new Date(due) <= now) return setError("希望期限は今より後にしてください");
     const listUntil = new Date(Math.min(now.getTime() + Number(listHours) * 3600_000, new Date(due).getTime())).toISOString();
-    s.addRequest({
+    const err = s.addRequest({
       kind,
       title: title.trim(),
       detail: detail.trim(),
       courseId: assignment?.courseId ?? null,
       assignmentId: assignment?.id ?? null,
-      price: p,
+      price: Number(price),
       listUntil,
       dueAt: due,
     });
+    if (err) return setError(err);
     navigate("/board", { replace: true });
   };
 
@@ -103,7 +97,7 @@ export default function RequestNew() {
           </select>
         </Field>
         <Field label="タイトル">
-          <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input className={inputCls} value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} />
         </Field>
         <Field label="相手にお願いしたいこと">
           <textarea
@@ -114,7 +108,7 @@ export default function RequestNew() {
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="即決価格（ぺい）" hint={`残高 ${pei(balance)}`}>
+          <Field label="即決価格（ぺい）" hint={`残高 ${pei(balance)}・投稿時に預かります`}>
             <input className={inputCls} inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))} />
           </Field>
           <Field label="掲載時間">

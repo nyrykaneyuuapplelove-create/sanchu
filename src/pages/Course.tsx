@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { membersOf, useStore } from "../lib/store";
-import { DAYS, fmtDateTime, periodLabel, relative } from "../lib/time";
+import { canSee, membersOf, useStore } from "../lib/store";
+import { DAYS, fmtDateTime, periodLabel } from "../lib/time";
 import { PageHeader } from "../components/Layout";
 import { LivePanel } from "../components/LivePanel";
 import { Avatar, Button, Card, Empty, Pill, SectionTitle, UserName, inputCls, useNow } from "../components/ui";
+import { PostItem } from "../components/PostItem";
 
 type Tab = "board" | "tasks" | "members" | "syllabus";
 
@@ -18,21 +19,31 @@ export default function CoursePage() {
   const assignments = useStore((s) => s.assignments);
   const submissions = useStore((s) => s.submissions);
   const users = useStore((s) => s.users);
+  const reports = useStore((s) => s.reports);
+  const blocks = useStore((s) => s.blocks);
   const addPost = useStore((s) => s.addPost);
   const setEnrolled = useStore((s) => s.setEnrolled);
   const updateCourse = useStore((s) => s.updateCourse);
   const [tab, setTab] = useState<Tab>("board");
   const [text, setText] = useState("");
   const [syllabus, setSyllabus] = useState(course?.syllabusUrl ?? "");
+  const [error, setError] = useState("");
+  const [syllabusMsg, setSyllabusMsg] = useState("");
 
   const members = useMemo(() => (course ? membersOf({ enrollments }, course.id) : []), [enrollments, course]);
   const thread = useMemo(
-    () => posts.filter((p) => p.courseId === id).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-    [posts, id],
+    () =>
+      posts
+        .filter((p) => p.courseId === id && canSee({ reports, blocks, me }, "post", p.id, p.userId))
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [posts, id, reports, blocks, me],
   );
   const tasks = useMemo(
-    () => assignments.filter((a) => a.courseId === id).sort((a, b) => a.deadline.localeCompare(b.deadline)),
-    [assignments, id],
+    () =>
+      assignments
+        .filter((a) => a.courseId === id && canSee({ reports, blocks, me }, "assignment", a.id, a.createdBy))
+        .sort((a, b) => a.deadline.localeCompare(b.deadline)),
+    [assignments, id, reports, blocks, me],
   );
 
   if (!course) return <Empty>授業が見つかりません</Empty>;
@@ -94,33 +105,34 @@ export default function CoursePage() {
           ) : (
             <ul className="space-y-3">
               {thread.map((p) => (
-                <li key={p.id} className="flex gap-3">
-                  <Avatar userId={p.userId} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2 text-sm">
-                      <UserName userId={p.userId} />
-                      <span className="text-[11px] text-stone-400">{relative(p.createdAt, now)}</span>
-                    </div>
-                    <p className="text-[15px] break-words whitespace-pre-wrap">{p.text}</p>
-                  </div>
-                </li>
+                <PostItem key={p.id} p={p} now={now} />
               ))}
             </ul>
           )}
           {enrolled ? (
+            <>
             <div className="mt-4 flex gap-2">
-              <textarea className={`${inputCls} h-11 resize-none`} value={text} onChange={(e) => setText(e.target.value)} placeholder="書き込む" />
+              <textarea
+                className={`${inputCls} h-11 resize-none`}
+                value={text}
+                maxLength={500}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="書き込む"
+              />
               <Button
                 className="shrink-0"
                 disabled={!text.trim()}
                 onClick={() => {
-                  addPost(course.id, text.trim());
-                  setText("");
+                  const err = addPost(course.id, text.trim());
+                  setError(err ?? "");
+                  if (!err) setText("");
                 }}
               >
                 送信
               </Button>
             </div>
+            {error && <p className="mt-2 text-sm font-semibold text-rose-600">{error}</p>}
+            </>
           ) : (
             <p className="mt-3 text-xs text-stone-400">履修登録すると書き込めます</p>
           )}
@@ -203,13 +215,14 @@ export default function CoursePage() {
           ) : (
             <Empty>シラバスのリンクはまだ登録されていません</Empty>
           )}
+          {syllabusMsg && <p className="text-xs font-semibold text-stone-600">{syllabusMsg}</p>}
           {enrolled && (
             <div className="flex gap-2">
               <input className={inputCls} value={syllabus} onChange={(e) => setSyllabus(e.target.value)} placeholder="https://..." />
               <Button
                 className="shrink-0"
                 disabled={!/^https?:\/\//.test(syllabus)}
-                onClick={() => updateCourse(course.id, { syllabusUrl: syllabus.trim() })}
+                onClick={() => setSyllabusMsg(updateCourse(course.id, { syllabusUrl: syllabus.trim() }) ?? "保存しました")}
               >
                 保存
               </Button>

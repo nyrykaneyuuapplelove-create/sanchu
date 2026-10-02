@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { membersOf, myCourseIds, useStore } from "../lib/store";
+import { canSee, membersOf, myCourseIds, useStore } from "../lib/store";
 import { fmtDateTime, relative } from "../lib/time";
 import { pei } from "../lib/utils";
 import { PageHeader } from "../components/Layout";
@@ -17,14 +17,14 @@ export default function Assignments() {
   const isDone = (aid: string) => s.submissions.some((x) => x.assignmentId === aid && x.userId === me);
 
   const list = useMemo(() => {
-    const all = s.assignments.filter((a) => mine.has(a.courseId));
+    const all = s.assignments.filter((a) => mine.has(a.courseId) && canSee(s, "assignment", a.id, a.createdBy));
     if (tab === "todo") return all.filter((a) => !isDone(a.id) && new Date(a.deadline) > now).sort((a, b) => a.deadline.localeCompare(b.deadline));
     return all.filter((a) => isDone(a.id) || new Date(a.deadline) <= now).sort((a, b) => b.deadline.localeCompare(a.deadline));
-  }, [s.assignments, s.submissions, mine, tab, now]);
+  }, [s.assignments, s.submissions, s.reports, s.blocks, mine, tab, now]);
 
   // 自分が引き受けた依頼（受注内容）も課題欄に出す
   const accepted = s.requests
-    .filter((r) => r.acceptedBy === me && r.status === "accepted")
+    .filter((r) => r.acceptedBy === me && (r.status === "accepted" || r.status === "reported" || r.status === "dispute"))
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
 
   return (

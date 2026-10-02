@@ -15,6 +15,7 @@ const ICON: Record<NotificationKind, string> = {
   money: "💰",
   board: "💬",
   system: "🎉",
+  moderation: "🚩",
 };
 
 export default function Inbox() {

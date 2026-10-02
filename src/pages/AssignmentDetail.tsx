@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { membersOf, useStore } from "../lib/store";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { canSee, isHidden, membersOf, useStore } from "../lib/store";
+import { HiddenNote, ModMenu } from "../components/Moderation";
 import type { Submission } from "../lib/types";
 import { fmtDateTime, relative } from "../lib/time";
 import { readAsDataUrl } from "../lib/utils";
@@ -16,6 +17,8 @@ export default function AssignmentDetail() {
   const me = s.me!;
   const a = s.assignments.find((x) => x.id === id);
   const [editing, setEditing] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const members = useMemo(() => (a ? membersOf(s, a.courseId) : []), [a, s.enrollments]);
   const subs = useMemo(
@@ -23,7 +26,7 @@ export default function AssignmentDetail() {
     [s.submissions, id, members],
   );
 
-  if (!a) return <Empty>課題が見つかりません</Empty>;
+  if (!a || !canSee(s, "assignment", a.id, a.createdBy)) return <Empty>課題が見つかりません（通報により非表示になった可能性があります）</Empty>;
   const course = s.courses.find((c) => c.id === a.courseId);
   const mine = subs.find((x) => x.userId === me);
   const closed = new Date(a.deadline) <= now;
@@ -33,10 +36,28 @@ export default function AssignmentDetail() {
     <div className="space-y-4">
       <PageHeader title="課題" back />
       <Card>
-        <Link to={`/course/${a.courseId}`} className="text-xs font-bold text-teal-700">
-          {course?.name}
-        </Link>
+        <div className="flex items-start">
+          <Link to={`/course/${a.courseId}`} className="flex-1 text-xs font-bold text-teal-700">
+            {course?.name}
+          </Link>
+          <ModMenu
+            type="assignment"
+            id={a.id}
+            owner={a.createdBy}
+            onDelete={
+              a.createdBy === me
+                ? () => {
+                    const err = s.deleteAssignment(a.id);
+                    if (err) setError(err);
+                    else navigate("/assignments", { replace: true });
+                  }
+                : undefined
+            }
+          />
+        </div>
         <h2 className="mt-1 text-xl font-black">{a.title}</h2>
+        {a.createdBy === me && isHidden(s, "assignment", a.id) && <HiddenNote />}
+        {error && <p className="mt-1 text-sm font-semibold text-rose-600">{error}</p>}
         <div className="mt-2 flex items-center gap-2 text-sm">
           <span>締め切り {fmtDateTime(a.deadline)}</span>
           <Pill tone={closed ? "stone" : "rose"}>{closed ? "締切済み" : relative(a.deadline, now)}</Pill>
@@ -88,8 +109,9 @@ export default function AssignmentDetail() {
           <SubmitForm
             initial={mine}
             onDone={(detail) => {
-              s.submit(a.id, detail);
-              setEditing(false);
+              const err = s.submit(a.id, detail);
+              if (!err) setEditing(false);
+              return err;
             }}
             onCancel={() => setEditing(false)}
           />
@@ -113,12 +135,12 @@ export default function AssignmentDetail() {
       <Card>
         <SectionTitle>みんなの共有</SectionTitle>
         {!closed && <p className="mb-3 rounded-xl bg-sky-50 p-2.5 text-xs text-sky-800">成果物（文章・ファイル）は、締め切りが過ぎてから公開されます。今見えるのは注意点と所要時間だけです。</p>}
-        {subs.filter((x) => x.userId !== me && (x.caution || x.minutes || x.artifactText || x.artifactFile)).length === 0 ? (
+        {subs.filter((x) => x.userId !== me && !(s.blocks[me] ?? []).includes(x.userId) && (x.caution || x.minutes || x.artifactText || x.artifactFile)).length === 0 ? (
           <Empty>まだ共有はありません</Empty>
         ) : (
           <ul className="space-y-4">
             {subs
-              .filter((x) => x.userId !== me && (x.caution || x.minutes || x.artifactText || x.artifactFile))
+              .filter((x) => x.userId !== me && !(s.blocks[me] ?? []).includes(x.userId) && (x.caution || x.minutes || x.artifactText || x.artifactFile))
               .map((x) => (
                 <li key={x.userId} className="flex gap-3">
                   <Avatar userId={x.userId} />
@@ -164,7 +186,7 @@ function SubmitForm({
   onCancel,
 }: {
   initial?: Submission;
-  onDone: (d: Partial<Submission>) => void;
+  onDone: (d: Partial<Submission>) => string | null;
   onCancel: () => void;
 }) {
   const [caution, setCaution] = useState(initial?.caution ?? "");
@@ -213,7 +235,9 @@ function SubmitForm({
         <Button
           className="flex-1"
           onClick={() =>
-            onDone({ caution: caution.trim(), minutes: minutes ? Number(minutes) : null, artifactText: artifactText.trim(), artifactFile: file })
+            setError(
+              onDone({ caution: caution.trim(), minutes: minutes ? Number(minutes) : null, artifactText: artifactText.trim(), artifactFile: file }) ?? "",
+            )
           }
         >
           提出済みにして共有

@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { balanceOf, liveCourse, myCourseIds, useStore } from "../lib/store";
+import { balanceOf, canSee, isHidden, liveCourse, myCourseIds, useStore } from "../lib/store";
 import { DAYS, PERIODS, currentSlot, fmtDateTime, fmtMin, periodLabel, relative, weekday } from "../lib/time";
 import { pei } from "../lib/utils";
-import { Avatar, Card, Empty, Pill, SectionTitle, UserName, useNow } from "../components/ui";
+import { Card, Empty, Pill, SectionTitle, useNow } from "../components/ui";
+import { PostItem } from "../components/PostItem";
+import { RestrictedBanner } from "../components/Moderation";
 import { LivePanel } from "../components/LivePanel";
 import { useSendMoney } from "../components/SendMoney";
 
@@ -32,26 +34,28 @@ export default function Home() {
         .filter(
           (a) =>
             mine.has(a.courseId) &&
+            !isHidden(s, "assignment", a.id) &&
             new Date(a.deadline) > now &&
             !s.submissions.some((x) => x.assignmentId === a.id && x.userId === me),
         )
         .sort((a, b) => a.deadline.localeCompare(b.deadline)),
-    [s.assignments, s.submissions, mine, me, now],
+    [s.assignments, s.submissions, s.reports, mine, me, now],
   );
 
   const feed = useMemo(
     () =>
       s.posts
-        .filter((p) => mine.has(p.courseId))
+        .filter((p) => mine.has(p.courseId) && canSee(s, "post", p.id, p.userId))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, 30),
-    [s.posts, mine],
+    [s.posts, s.reports, s.blocks, mine],
   );
 
   const slot = currentSlot(now);
 
   return (
     <div className="space-y-4">
+      <RestrictedBanner />
       <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-teal-700 to-emerald-600 p-4 text-white shadow">
         <div className="flex-1">
           <div className="text-xs text-teal-100">ぺい残高</div>
@@ -126,19 +130,7 @@ export default function Home() {
         ) : (
           <ul className="space-y-3">
             {feed.map((p) => (
-              <li key={p.id} className="flex gap-3">
-                <Avatar userId={p.userId} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                    <UserName userId={p.userId} />
-                    <Link to={`/course/${p.courseId}`} className="text-xs font-bold text-teal-700">
-                      {courseOf(p.courseId)?.name}
-                    </Link>
-                    <span className="text-[11px] text-stone-400">{relative(p.createdAt, now)}</span>
-                  </div>
-                  <p className="text-[15px] break-words whitespace-pre-wrap">{p.text}</p>
-                </div>
-              </li>
+              <PostItem key={p.id} p={p} now={now} courseName={courseOf(p.courseId)?.name} />
             ))}
           </ul>
         )}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { balanceOf, useStore } from "../lib/store";
-import type { Transaction, TxCategory } from "../lib/types";
+import { ESCROW, type Transaction, type TxCategory } from "../lib/types";
 import { fmtDateTime } from "../lib/time";
 import { pei } from "../lib/utils";
 import { PageHeader } from "../components/Layout";
@@ -9,7 +9,7 @@ import { Avatar, Button, Card, Empty, Modal, SectionTitle, useNow } from "../com
 
 const IN = "#0d9488";
 const OUT = "#e11d48";
-const CAT: Record<TxCategory, string> = { transfer: "送金", reward: "依頼の報酬", bonus: "ボーナス" };
+const CAT: Record<TxCategory, string> = { transfer: "送金", reward: "依頼の報酬", bonus: "ボーナス", escrow: "依頼の預け入れ", refund: "依頼の返金" };
 
 export default function Wallet() {
   const now = useNow();
@@ -41,7 +41,8 @@ export default function Wallet() {
   const expense = month.filter((t) => t.from === me).reduce((a, t) => a + t.amount, 0);
 
   const partner = (t: Transaction) => (t.to === me ? t.from : t.to);
-  const partnerName = (id: string) => (id === "system" ? "さんちゅ" : (users.find((u) => u.id === id)?.name ?? "退会したユーザー"));
+  const partnerName = (id: string) =>
+    id === "system" ? "さんちゅ" : id === ESCROW ? "預かり口座" : (users.find((u) => u.id === id)?.name ?? "退会したユーザー");
 
   // 何で稼いで、何に使ったか（種類ごと）
   const breakdown = (dir: "in" | "out") => {
@@ -127,7 +128,7 @@ export default function Wallet() {
               const isIn = t.to === me;
               return (
                 <li key={t.id} className="flex items-center gap-3 py-2.5">
-                  {p === "system" ? (
+                  {p === "system" || p === ESCROW ? (
                     <span className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-700 text-sm font-black text-white">さ</span>
                   ) : (
                     <Avatar userId={p} />

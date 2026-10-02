@@ -1,5 +1,6 @@
 import { Link, Navigate, useParams } from "react-router-dom";
-import { useStore, useUser } from "../lib/store";
+import { isBlocked, useStore, useUser } from "../lib/store";
+import { ModMenu, TradeBadge } from "../components/Moderation";
 import { DAYS } from "../lib/time";
 import { PageHeader } from "../components/Layout";
 import { ProfileCard } from "../components/ProfileCard";
@@ -13,6 +14,8 @@ export default function UserPage() {
   const enrollments = useStore((s) => s.enrollments);
   const courses = useStore((s) => s.courses);
   const sendMoney = useSendMoney();
+  const blocks = useStore((s) => s.blocks);
+  const toggleBlock = useStore((s) => s.toggleBlock);
 
   if (id === me) return <Navigate to="/me" replace />;
   if (!user) return <Empty>ユーザーが見つかりません</Empty>;
@@ -20,9 +23,33 @@ export default function UserPage() {
   const mine = new Set(enrollments[me!] ?? []);
   const common = courses.filter((c) => mine.has(c.id) && (enrollments[user.id] ?? []).includes(c.id));
 
+  const iBlocked = (blocks[me!] ?? []).includes(user.id);
+  if (isBlocked({ blocks }, me!, user.id)) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={user.name} back />
+        <Card className="space-y-3 text-center">
+          <p className="text-sm text-stone-600">{iBlocked ? "ブロック中のユーザーです" : "このユーザーのプロフィールは表示できません"}</p>
+          {iBlocked && (
+            <Button variant="ghost" onClick={() => toggleBlock(user.id)}>
+              ブロックを解除
+            </Button>
+          )}
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <PageHeader title={user.name} back />
+      <PageHeader title={user.name} back right={<ModMenu type="user" id={user.id} owner={user.id} />} />
+      <Card className="space-y-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-bold">取引の評価</span>
+          <span className="text-xs text-stone-500">学籍番号 {user.studentId}</span>
+        </div>
+        <TradeBadge userId={user.id} />
+      </Card>
       <div className="flex justify-center">
         <ProfileCard user={user} />
       </div>

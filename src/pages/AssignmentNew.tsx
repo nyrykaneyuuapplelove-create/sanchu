@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { myCourseIds, useStore } from "../lib/store";
+import { canSee, myCourseIds, useStore } from "../lib/store";
 import type { Assignment } from "../lib/types";
 import { DAYS, fmtDateTime, fromLocalInput, toLocalInput } from "../lib/time";
 import { PageHeader } from "../components/Layout";
@@ -25,18 +25,25 @@ export default function AssignmentNew() {
   });
   const [materials, setMaterials] = useState("");
   const [dups, setDups] = useState<Assignment[] | null>(null);
+  const [error, setError] = useState("");
 
   const valid = courseId && title.trim() && deadline;
 
   const save = () => {
-    const id = s.addAssignment({ courseId, title: title.trim(), deadline: fromLocalInput(deadline), materials: materials.trim() });
-    navigate(`/assignments/${id}`, { replace: true });
+    const res = s.addAssignment({ courseId, title: title.trim(), deadline: fromLocalInput(deadline), materials: materials.trim() });
+    if ("error" in res) {
+      setDups(null);
+      return setError(res.error);
+    }
+    navigate(`/assignments/${res.id}`, { replace: true });
   };
 
   const trySave = () => {
     // 同じ授業・同じ時刻（前後1時間）の締め切りの課題がすでにあれば、被りではないか確認する
     const dl = new Date(fromLocalInput(deadline)).getTime();
-    const same = s.assignments.filter((a) => a.courseId === courseId && Math.abs(new Date(a.deadline).getTime() - dl) <= 3600_000);
+    const same = s.assignments.filter(
+      (a) => a.courseId === courseId && Math.abs(new Date(a.deadline).getTime() - dl) <= 3600_000 && canSee(s, "assignment", a.id, a.createdBy),
+    );
     if (same.length > 0) setDups(same);
     else save();
   };
@@ -64,7 +71,7 @@ export default function AssignmentNew() {
           </select>
         </Field>
         <Field label="タイトル（必須）">
-          <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 第6回 レポート" />
+          <input className={inputCls} value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="例: 第6回 レポート" />
         </Field>
         <Field label="締め切り（必須）">
           <input type="datetime-local" className={inputCls} value={deadline} onChange={(e) => setDeadline(e.target.value)} />
@@ -72,7 +79,8 @@ export default function AssignmentNew() {
         <Field label="必要な資料（任意）" hint="教科書のページ、配布資料の名前、URL など">
           <textarea className={`${inputCls} h-20`} value={materials} onChange={(e) => setMaterials(e.target.value)} />
         </Field>
-        <p className="text-xs text-stone-500">登録した課題は、この授業の履修者全員に共有されます。</p>
+        <p className="text-xs text-stone-500">登録した課題は、この授業の履修者全員に共有されます。存在しない課題を登録すると通報の対象になります。</p>
+        {error && <p className="text-sm font-semibold text-rose-600">{error}</p>}
         <Button className="w-full" disabled={!valid} onClick={trySave}>
           登録する
         </Button>

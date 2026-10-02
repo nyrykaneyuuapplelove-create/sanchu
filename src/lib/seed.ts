@@ -1,13 +1,16 @@
-import type {
-  Assignment,
-  Course,
-  HelpRequest,
-  LiveInfo,
-  Post,
-  Profile,
-  Submission,
-  Transaction,
-  User,
+import {
+  ESCROW,
+  type Rating,
+  type Report,
+  type Assignment,
+  type Course,
+  type HelpRequest,
+  type LiveInfo,
+  type Post,
+  type Profile,
+  type Submission,
+  type Transaction,
+  type User,
 } from "./types";
 import { hueOf, initialAvatar } from "./utils";
 import { ymd } from "./time";
@@ -40,6 +43,7 @@ export function makeSeed(nowMs: number) {
   const user = (id: string, name: string, studentId: string, p: Partial<Profile>): User => ({
     id,
     name,
+    nameChangedAt: null,
     studentId,
     avatar: initialAvatar(name, hueOf(name)),
     profile: { ...emptyProfile(), ...p },
@@ -77,6 +81,8 @@ export function makeSeed(nowMs: number) {
     user("u6", "伊藤 大和", "4624006", { faculty: "工学部 情報工学科", grade: "2年", lineId: "yamato_demo", hobbies: "競プロ", cardTheme: "sunset" }),
     user("u7", "渡辺 さくら", "4624007", { faculty: "理学部 数学科", grade: "2年", lineId: "sakura_demo", hobbies: "読書" }),
     user("u8", "山本 颯", "4624008", { faculty: "理学部 数学科", grade: "2年", lineId: "hayate_demo", hobbies: "サッカー" }),
+    // 荒らしの例（通報で投稿が隠れている・嘘の連絡が沈んでいる・依頼を途中で放棄した）
+    user("u9", "ななし", "4624009", { faculty: "理学部 数学科", grade: "2年" }),
   ];
 
   const c = (id: string, name: string, teacher: string, day: number, period: number, room: string): Course => ({
@@ -108,6 +114,7 @@ export function makeSeed(nowMs: number) {
   enrollments.u6 = ["c3", "c4", "c5", "c8"];
   enrollments.u2.push("c3", "c5");
   enrollments.u3.push("c5", "c8");
+  enrollments.u9 = ["c1", "c4"];
 
   const a = (id: string, courseId: string, title: string, deadlineMs: number, materials = "", createdBy = "u2"): Assignment => ({
     id,
@@ -165,6 +172,7 @@ export function makeSeed(nowMs: number) {
     post("p4", "c3", "u6", "PC2 の教室、今日はプロジェクター不調らしい", -26 * H),
     post("p5", "c4", "u5", "小テストは電卓持ち込み可だそうです", -30 * H),
     post("p6", "c1", "u7", "ノート見せてくれる人いたら嬉しいです🙏", -50 * H),
+    post("p7", "c1", "u9", "この授業マジで意味ない。先生の話つまらなすぎ。みんなもそう思うよね？", -90 * 60_000),
   ];
 
   const live: LiveInfo[] = [
@@ -177,6 +185,20 @@ export function makeSeed(nowMs: number) {
       userId: "u5",
       createdAt: at(-30 * 60_000),
       confirms: ["u5", "u3", "u8"],
+      denies: [],
+      notified: true,
+    },
+    {
+      id: "lv2",
+      courseId: "c4",
+      date: ymd(new Date(nowMs)),
+      kind: "cancel",
+      text: "今日休講らしいよ（掲示板に出てた）",
+      userId: "u9",
+      createdAt: at(-40 * 60_000),
+      confirms: ["u9"],
+      denies: ["u3", "u5", "u8"],
+      notified: false,
     },
   ];
 
@@ -212,6 +234,8 @@ export function makeSeed(nowMs: number) {
       status: "open",
       acceptedBy: null,
       acceptedAt: null,
+      reportedAt: null,
+      noShow: false,
       createdAt: at(-1 * H),
     },
     {
@@ -228,6 +252,8 @@ export function makeSeed(nowMs: number) {
       status: "open",
       acceptedBy: null,
       acceptedAt: null,
+      reportedAt: null,
+      noShow: false,
       createdAt: at(-3 * H),
     },
     {
@@ -244,9 +270,59 @@ export function makeSeed(nowMs: number) {
       status: "open",
       acceptedBy: null,
       acceptedAt: null,
+      reportedAt: null,
+      noShow: false,
       createdAt: at(-8 * H),
     },
   ];
 
-  return { users, courses, enrollments, assignments, submissions, posts, live, tx, requests };
+  // 過去の依頼（評価・途中放棄の記録のため）
+  const past = (id: string, userId: string, acceptedBy: string, title: string, price: number, ms: number, status: HelpRequest["status"], noShow = false): HelpRequest => ({
+    id,
+    userId,
+    kind: "question",
+    title,
+    detail: "",
+    courseId: null,
+    assignmentId: null,
+    price,
+    listUntil: at(ms),
+    dueAt: at(ms),
+    status,
+    acceptedBy,
+    acceptedAt: at(ms - D),
+    reportedAt: null,
+    noShow,
+    createdAt: at(ms - 2 * D),
+  });
+  requests.push(
+    past("h1", "u7", "u1", "線形代数の固有値の考え方", 300, -40 * D, "done"),
+    past("h2", "u5", "u1", "確率統計の勉強会の進行役", 250, -12 * D, "done"),
+    past("h3", "u1", "u7", "解析学のε-δを説明してほしい", 150, -1 * D, "done"),
+    past("h4", "u3", "u9", "微分方程式の解き方を教えてほしい", 200, -9 * D, "cancelled", true),
+    past("h5", "u8", "u9", "C 言語の配列の質問", 150, -4 * D, "cancelled", true),
+  );
+  const ratings: Rating[] = [
+    { requestId: "h1", from: "u7", to: "u1", good: true, createdAt: at(-40 * D) },
+    { requestId: "h1", from: "u1", to: "u7", good: true, createdAt: at(-40 * D) },
+    { requestId: "h2", from: "u5", to: "u1", good: true, createdAt: at(-12 * D) },
+    { requestId: "h3", from: "u1", to: "u7", good: true, createdAt: at(-1 * D) },
+  ];
+  // 募集中の依頼の報酬は、投稿した時点で預かっている
+  for (const r of requests.filter((x) => x.status === "open")) {
+    tx.push({ id: `t${++n}`, from: r.userId, to: ESCROW, amount: r.price, memo: `依頼の報酬を預けました：${r.title}`, category: "escrow", requestId: r.id, createdAt: r.createdAt });
+  }
+
+  // 荒らしの投稿は3人から通報されて非表示になっている
+  const reports: Report[] = ["u2", "u3", "u5"].map((who, i) => ({
+    id: `rp${i}`,
+    targetType: "post",
+    targetId: "p7",
+    targetOwner: "u9",
+    reporterId: who,
+    reason: "abuse",
+    createdAt: at(-60 * 60_000),
+  }));
+
+  return { users, courses, enrollments, assignments, submissions, posts, live, tx, requests, ratings, reports, blocks: {} as Record<string, string[]> };
 }

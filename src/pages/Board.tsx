@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useStore } from "../lib/store";
+import { canSee, useStore } from "../lib/store";
+import { TradeBadge } from "../components/Moderation";
 import type { HelpRequest, RequestKind } from "../lib/types";
 import { fmtDateTime, relative } from "../lib/time";
 import { PageHeader } from "../components/Layout";
@@ -20,6 +21,8 @@ export default function Board() {
   const requests = useStore((s) => s.requests);
   const courses = useStore((s) => s.courses);
   const me = useStore((s) => s.me)!;
+  const reports = useStore((s) => s.reports);
+  const blocks = useStore((s) => s.blocks);
   const [sort, setSort] = useState<Sort>("due");
   const [kind, setKind] = useState<RequestKind | "all">("all");
   const [mineOnly, setMineOnly] = useState(false);
@@ -28,7 +31,10 @@ export default function Board() {
     const open = requests.filter((r) =>
       mineOnly
         ? r.userId === me || r.acceptedBy === me
-        : r.status === "open" && new Date(r.listUntil) > now && (kind === "all" || r.kind === kind),
+        : r.status === "open" &&
+          new Date(r.listUntil) > now &&
+          (kind === "all" || r.kind === kind) &&
+          canSee({ reports, blocks, me }, "request", r.id, r.userId),
     );
     const by: Record<Sort, (a: HelpRequest, b: HelpRequest) => number> = {
       price: (a, b) => b.price - a.price,
@@ -36,7 +42,7 @@ export default function Board() {
       new: (a, b) => b.createdAt.localeCompare(a.createdAt),
     };
     return [...open].sort(by[sort]);
-  }, [requests, now, kind, sort, mineOnly, me]);
+  }, [requests, now, kind, sort, mineOnly, me, reports, blocks]);
 
   return (
     <div className="space-y-3">
@@ -50,6 +56,7 @@ export default function Board() {
       />
       <p className="rounded-xl bg-sky-50 p-3 text-xs leading-relaxed text-sky-900">
         わからないところの解説、勉強会、チューターをぺいでお願いできます。<b>課題の代行や、答え・成果物の受け渡しの依頼は禁止</b>です。
+        報酬は投稿した時点で預かり、依頼者が完了を確認すると支払われます。
       </p>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -95,12 +102,13 @@ export default function Board() {
                     <div className="mb-1 flex flex-wrap items-center gap-1.5">
                       <Pill tone="sky">{REQUEST_KINDS[r.kind]}</Pill>
                       {r.courseId && <span className="truncate text-[11px] font-bold text-teal-700">{courses.find((c) => c.id === r.courseId)?.name}</span>}
-                      {r.status !== "open" && <Pill tone={r.status === "accepted" ? "amber" : "stone"}>{STATUS[r.status]}</Pill>}
+                      {r.status !== "open" && <Pill tone={r.status === "dispute" ? "rose" : r.status === "done" || r.status === "cancelled" ? "stone" : "amber"}>{STATUS[r.status]}</Pill>}
                     </div>
                     <div className="font-bold leading-snug">{r.title}</div>
                     <div className="mt-1 text-[11px] text-stone-500">
                       希望期限 {fmtDateTime(r.dueAt)}　掲載 {relative(r.listUntil, now)}まで
                     </div>
+                    <TradeBadge userId={r.userId} compact />
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-[10px] font-bold text-stone-400">即決</div>
@@ -118,7 +126,14 @@ export default function Board() {
   );
 }
 
-export const STATUS = { open: "募集中", accepted: "成立", done: "完了", cancelled: "取り下げ" } as const;
+export const STATUS: Record<HelpRequest["status"], string> = {
+  open: "募集中",
+  accepted: "成立",
+  reported: "完了報告あり",
+  done: "完了",
+  dispute: "問題の報告あり",
+  cancelled: "終了",
+};
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (

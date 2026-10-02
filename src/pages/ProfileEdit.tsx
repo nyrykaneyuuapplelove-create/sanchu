@@ -32,13 +32,14 @@ export default function ProfileEdit() {
   const [name, setName] = useState(me.name);
   const [avatar, setAvatar] = useState(me.avatar);
   const [p, setP] = useState<Profile>(me.profile);
+  const [error, setError] = useState("");
 
   const set = (k: keyof Profile, v: string) => setP((x) => ({ ...x, [k]: v }));
   const setLife = (life: LifeEvent[]) => setP((x) => ({ ...x, life }));
 
   const save = () => {
-    updateMe({ name: name.trim() || me.name, avatar });
-    updateProfile(p);
+    const err = updateMe({ name: name.trim() || me.name, avatar }) ?? updateProfile(p);
+    if (err) return setError(err);
     navigate("/me");
   };
 
@@ -64,8 +65,8 @@ export default function ProfileEdit() {
             <p className="text-xs text-stone-500">最初は LINE のアイコンが使われます</p>
           </div>
         </div>
-        <Field label="名前">
-          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
+        <Field label="名前" hint="なりすまし防止のため、名前の変更は30日に1回までです">
+          <input className={inputCls} value={name} maxLength={20} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="学籍番号" hint="学籍番号は変更できません">
           <input className={`${inputCls} bg-stone-100`} value={me.studentId} disabled />
@@ -114,6 +115,7 @@ export default function ProfileEdit() {
         </button>
       </Card>
 
+      {error && <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</p>}
       <Button className="w-full py-3" onClick={save}>
         保存する
       </Button>

@@ -30,6 +30,7 @@ export type CardTheme = "mint" | "sunset" | "night" | "sakura";
 export interface User {
   id: ID;
   name: string;
+  nameChangedAt: string | null; // なりすまし対策：名前の変更は30日に1回
   studentId: string;
   avatar: string; // 画像 URL（LINE のアイコン or アップロード画像）
   profile: Profile;
@@ -91,13 +92,18 @@ export interface LiveInfo {
   userId: ID;
   createdAt: string;
   confirms: ID[];
+  denies: ID[]; // 「違う」と言った人。嘘の連絡を沈めるため
+  notified: boolean; // 2人以上が確認してから履修者全員に通知する
 }
 
-export type TxCategory = "transfer" | "reward" | "bonus";
+export type TxCategory = "transfer" | "reward" | "bonus" | "escrow" | "refund";
+
+/** 依頼の報酬を、完了まで預かっておく口座 */
+export const ESCROW = "escrow";
 
 export interface Transaction {
   id: ID;
-  from: ID | "system";
+  from: ID | "system" | typeof ESCROW;
   to: ID;
   amount: number;
   memo: string;
@@ -107,7 +113,11 @@ export interface Transaction {
 }
 
 export type RequestKind = "question" | "study" | "tutor" | "other";
-export type RequestStatus = "open" | "accepted" | "done" | "cancelled";
+/**
+ * open: 募集中 / accepted: 成立 / reported: 引き受けた人が完了を報告 /
+ * done: 完了（報酬を支払い済み） / dispute: 依頼者が問題を報告（報酬は預かったまま）/ cancelled: 取り下げ・取り消し
+ */
+export type RequestStatus = "open" | "accepted" | "reported" | "done" | "dispute" | "cancelled";
 
 /** 依頼板の投稿（質問・解説の依頼、勉強会、チューター募集） */
 export interface HelpRequest {
@@ -124,6 +134,29 @@ export interface HelpRequest {
   status: RequestStatus;
   acceptedBy: ID | null;
   acceptedAt: string | null;
+  reportedAt: string | null;
+  noShow: boolean; // 引き受けた人が期限までに何もしなかった
+  createdAt: string;
+}
+
+export interface Rating {
+  requestId: ID;
+  from: ID;
+  to: ID;
+  good: boolean;
+  createdAt: string;
+}
+
+export type ReportTarget = "post" | "live" | "request" | "assignment" | "user";
+export type ReportReason = "abuse" | "false" | "cheat" | "spam" | "privacy" | "other";
+
+export interface Report {
+  id: ID;
+  targetType: ReportTarget;
+  targetId: ID;
+  targetOwner: ID;
+  reporterId: ID;
+  reason: ReportReason;
   createdAt: string;
 }
 
@@ -134,7 +167,8 @@ export type NotificationKind =
   | "accepted"
   | "money"
   | "board"
-  | "system";
+  | "system"
+  | "moderation";
 
 export interface AppNotification {
   id: ID;

@@ -3,6 +3,8 @@ import { PERIODS, fmtMin } from "../lib/time";
 import { PageHeader } from "../components/Layout";
 import { Button, Card, useNow } from "../components/ui";
 
+const NONE: string[] = [];
+
 export default function Settings() {
   const now = useNow();
   const users = useStore((s) => s.users);
@@ -12,6 +14,8 @@ export default function Settings() {
   const loginAs = useStore((s) => s.loginAs);
   const logout = useStore((s) => s.logout);
   const resetDemo = useStore((s) => s.resetDemo);
+  const blocked = useStore((s) => (s.me ? s.blocks[s.me] : undefined)) ?? NONE;
+  const toggleBlock = useStore((s) => s.toggleBlock);
 
   // 時計を「次の平日の指定時限の途中」に合わせる
   const jumpToPeriod = (day: number, period: number) => {
@@ -57,6 +61,28 @@ export default function Settings() {
             </button>
           ))}
         </div>
+      </Card>
+
+      <Card className="space-y-3">
+        <h2 className="font-bold">ブロック中のユーザー</h2>
+        {blocked.length === 0 ? (
+          <p className="text-sm text-stone-400">いません</p>
+        ) : (
+          <ul className="space-y-2">
+            {blocked.map((id) => {
+              const u = users.find((x) => x.id === id);
+              return (
+                <li key={id} className="flex items-center gap-3">
+                  <img src={u?.avatar} alt="" className="h-9 w-9 rounded-full object-cover" />
+                  <span className="flex-1 text-sm font-semibold">{u?.name}</span>
+                  <Button variant="ghost" className="px-3 py-1.5 text-xs" onClick={() => toggleBlock(id)}>
+                    解除
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Card>
 
       <Card className="space-y-2">
