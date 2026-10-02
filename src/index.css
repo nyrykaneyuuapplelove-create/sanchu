@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  color: #1c1917;
+  background: #fafaf9;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  margin: 0;
+  background: #e7e5e4;
+}
+button {
+  cursor: pointer;
+}
